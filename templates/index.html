@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Code Visualizer</title>
+  <style>
+    /* ── Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    /* ── Layout ── */
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    header {
+      margin-bottom: 2rem;
+    }
+    header h1 {
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: #7ee787;
+      letter-spacing: -0.5px;
+    }
+    header p {
+      margin-top: 0.4rem;
+      color: #8b949e;
+      font-size: 0.95rem;
+    }
+
+    /* ── Form ── */
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+    }
+    textarea {
+      width: 100%;
+      height: 220px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      color: #e6edf3;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.88rem;
+      padding: 0.9rem 1rem;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    textarea:focus { border-color: #238636; }
+    textarea::placeholder { color: #484f58; }
+
+    button[type="submit"] {
+      align-self: flex-start;
+      background: #238636;
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 500;
+      padding: 0.6rem 1.4rem;
+      transition: background 0.15s;
+    }
+    button[type="submit"]:hover { background: #2ea043; }
+
+    /* ── Error ── */
+    .error-box {
+      background: #2d1117;
+      border: 1px solid #f85149;
+      border-radius: 8px;
+      color: #f85149;
+      padding: 0.85rem 1rem;
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* ── Diagram wrapper ── */
+    .diagram-section {
+      position: relative;
+    }
+    .diagram-hint {
+      color: #8b949e;
+      font-size: 0.85rem;
+      margin-bottom: 0.6rem;
+    }
+    .diagram-hint span {
+      color: #7ee787;
+    }
+
+    /* ── SVG diagram ── */
+    #diagram-container {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 1.5rem;
+      overflow-x: auto;
+      position: relative;
+    }
+
+    /* Style the embedded SVG */
+    #diagram-container svg {
+      display: block;
+      margin: 0 auto;
+      max-width: 100%;
+    }
+
+    /* Make every node group clickable and show pointer cursor */
+    #diagram-container svg g.node {
+      cursor: pointer;
+    }
+    #diagram-container svg g.node:hover polygon,
+    #diagram-container svg g.node:hover rect,
+    #diagram-container svg g.node:hover ellipse {
+      stroke: #7ee787 !important;
+      stroke-width: 2px !important;
+    }
+    #diagram-container svg g.node.active-node rect,
+    #diagram-container svg g.node.active-node polygon,
+    #diagram-container svg g.node.active-node ellipse {
+      stroke: #7ee787 !important;
+      stroke-width: 2.5px !important;
+      filter: drop-shadow(0 0 6px #238636);
+    }
+
+    /* ── Inline detail panel ── */
+    #detail-panel {
+      display: none;
+      position: absolute;
+      background: #1c2128;
+      border: 1px solid #238636;
+      border-radius: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+      width: 340px;
+      max-width: calc(100vw - 2rem);
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 0.9rem;
+    }
+    .panel-label {
+      color: #7ee787;
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: monospace;
+    }
+    .panel-close {
+      background: none;
+      border: none;
+      color: #8b949e;
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+      padding: 0 0.2rem;
+      transition: color 0.15s;
+    }
+    .panel-close:hover { color: #f85149; }
+
+    .panel-body {
+      padding: 0.9rem;
+    }
+
+    .panel-summary {
+      color: #e6edf3;
+      font-size: 0.88rem;
+      line-height: 1.5;
+      margin-bottom: 0.75rem;
+    }
+
+    .panel-bullets {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 0.9rem;
+    }
+    .panel-bullets li {
+      color: #8b949e;
+      font-size: 0.83rem;
+      line-height: 1.5;
+      padding: 0.2rem 0 0.2rem 1rem;
+      position: relative;
+    }
+    .panel-bullets li::before {
+      content: "›";
+      color: #238636;
+      position: absolute;
+      left: 0;
+      font-weight: bold;
+    }
+
+    /* ── Live Example section ── */
+    .panel-example {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 0.7rem 0.85rem;
+    }
+    .panel-example-title {
+      color: #58a6ff;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+    .example-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-start;
+      margin-bottom: 0.35rem;
+    }
+    .example-row:last-child { margin-bottom: 0; }
+    .example-tag {
+      background: #1c2128;
+      border-radius: 3px;
+      color: #58a6ff;
+      font-family: monospace;
+      font-size: 0.75rem;
+      font-weight: 600;
+      min-width: 52px;
+      padding: 0.15rem 0.4rem;
+      text-align: center;
+    }
+    .example-tag.input  { color: #7ee787; background: #0d2017; }
+    .example-tag.inside { color: #e3b341; background: #1f1a0e; }
+    .example-tag.output { color: #f78166; background: #1f0d0a; }
+    .example-val {
+      color: #e6edf3;
+      font-family: monospace;
+      font-size: 0.8rem;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Code Visualizer</h1>
+    <p>Paste Python code and see its structure as a diagram. Click any node to learn what it does.</p>
+  </header>
+
+  <form method="POST">
+    <textarea
+      name="code"
+      placeholder="Paste your Python code here..."
+      spellcheck="false"
+    >{{ code }}</textarea>
+    <button type="submit">Visualize My Code</button>
+  </form>
+
+  {% if error %}
+  <div class="error-box">{{ error }}</div>
+  {% endif %}
+
+  {% if svg_diagram %}
+  <div class="diagram-section">
+    <p class="diagram-hint">Click any <span>node</span> in the diagram to see its details.</p>
+
+    <div id="diagram-container">
+      {{ svg_diagram | safe }}
+
+      <!-- Inline detail panel — floats near the clicked node -->
+      <div id="detail-panel">
+        <div class="panel-header">
+          <span class="panel-label" id="panel-label"></span>
+          <button class="panel-close" id="panel-close" title="Close">✕</button>
+        </div>
+        <div class="panel-body">
+          <p class="panel-summary" id="panel-summary"></p>
+          <ul class="panel-bullets" id="panel-bullets"></ul>
+          <div class="panel-example">
+            <div class="panel-example-title">Live Example</div>
+            <div class="example-row">
+              <span class="example-tag input">Input</span>
+              <span class="example-val" id="ex-input"></span>
+            </div>
+            <div class="example-row">
+              <span class="example-tag inside">Inside</span>
+              <span class="example-val" id="ex-inside"></span>
+            </div>
+            <div class="example-row">
+              <span class="example-tag output">Output</span>
+              <span class="example-val" id="ex-output"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // All node details passed from Flask as JSON
+    const NODE_DETAILS = {{ node_details_json | safe }};
+
+    const panel      = document.getElementById('detail-panel');
+    const panelLabel = document.getElementById('panel-label');
+    const panelSum   = document.getElementById('panel-summary');
+    const panelBulls = document.getElementById('panel-bullets');
+    const exInput    = document.getElementById('ex-input');
+    const exInside   = document.getElementById('ex-inside');
+    const exOutput   = document.getElementById('ex-output');
+    const closeBtn   = document.getElementById('panel-close');
+    const container  = document.getElementById('diagram-container');
+
+    let activeNode = null;
+
+    // Find every SVG node group (Graphviz wraps each node in a <g class="node">)
+    const svgNodes = container.querySelectorAll('svg g.node');
+
+    svgNodes.forEach(function(g) {
+      g.addEventListener('click', function(e) {
+        e.stopPropagation();
+
+        // The SVG node id is set on the inner <title> element by Graphviz
+        // The actual id we need is in the <title> tag inside the group
+        const titleEl = g.querySelector('title');
+        const nodeId  = titleEl ? titleEl.textContent.trim() : null;
+
+        if (!nodeId || !NODE_DETAILS[nodeId]) return;
+
+        const d = NODE_DETAILS[nodeId];
+
+        // Remove active class from previous node
+        if (activeNode) activeNode.classList.remove('active-node');
+        g.classList.add('active-node');
+        activeNode = g;
+
+        // Fill panel content
+        panelLabel.textContent = d.label;
+        panelSum.textContent   = d.summary;
+
+        panelBulls.innerHTML = '';
+        (d.bullets || []).forEach(function(b) {
+          const li = document.createElement('li');
+          li.textContent = b;
+          panelBulls.appendChild(li);
+        });
+
+        const ex = d.example || {};
+        exInput.textContent  = ex.input  || '—';
+        exInside.textContent = ex.inside || '—';
+        exOutput.textContent = ex.output || '—';
+
+        // Position the panel near the clicked node
+        const gRect         = g.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+
+        // Position relative to the container div
+        let top  = gRect.top  - containerRect.top  + container.scrollTop  + gRect.height + 8;
+        let left = gRect.left - containerRect.left + container.scrollLeft;
+
+        // Make sure panel does not go off the right edge
+        const panelWidth = 340;
+        if (left + panelWidth > container.offsetWidth - 10) {
+          left = container.offsetWidth - panelWidth - 10;
+        }
+        if (left < 4) left = 4;
+
+        panel.style.top  = top  + 'px';
+        panel.style.left = left + 'px';
+        panel.style.display = 'block';
+      });
+    });
+
+    // Close panel when clicking the X button
+    closeBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      closePanel();
+    });
+
+    // Close panel when clicking anywhere outside the panel and nodes
+    document.addEventListener('click', function() {
+      closePanel();
+    });
+
+    // Prevent clicks inside the panel from closing it
+    panel.addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+
+    function closePanel() {
+      panel.style.display = 'none';
+      if (activeNode) {
+        activeNode.classList.remove('active-node');
+        activeNode = null;
+      }
+    }
+  </script>
+  {% endif %}
+
+</div>
+</body>
+</html>
